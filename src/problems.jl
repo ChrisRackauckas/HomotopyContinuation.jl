@@ -360,7 +360,7 @@ function problem_startsolutions(
     supported, rest = splitkwargs(kwargs, input_supported_keywords)
     input, startsolutions = input_startsolutions(
         args...;
-        variables = variable_ordering,
+        variable_ordering = variable_ordering,
         supported...,
     )
     if variable_ordering !== nothing
@@ -368,7 +368,7 @@ function problem_startsolutions(
             input,
             startsolutions,
             seed;
-            variables = variable_ordering,
+            variable_ordering = variable_ordering,
             rest...,
         )
     else
