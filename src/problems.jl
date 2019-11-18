@@ -208,9 +208,10 @@ embed(prob::AbstractProblem{ProjectiveTracking}, v::PVector) = v
 embed(prob::AbstractProblem{AffineTracking}, v::AbstractVector) = v
 
 tracking_vector_type(prob::AbstractProblem{AffineTracking}) = Vector{ComplexF64}
-function tracking_vector_type(
-    prob::AbstractProblem{ProjectiveTracking,<:VariableGroups{N}},
-) where {N}
+function tracking_vector_type(prob::AbstractProblem{
+    ProjectiveTracking,
+    <:VariableGroups{N},
+},) where {N}
     PVector{ComplexF64,N}
 end
 
@@ -282,10 +283,8 @@ function apply_system_scaling(F, vars, system_scaling::Union{Nothing,Symbol,Bool
     elseif system_scaling === nothing || system_scaling == false
         F, nothing
     else
-        throw(ArgumentError(
-            "Got unsupported argument `system_scaling=$(system_scaling)`." *
-            " Valid values are `nothing`, `:equations` and `:equations_and_variables`.",
-        ))
+        throw(ArgumentError("Got unsupported argument `system_scaling=$(system_scaling)`." *
+                            " Valid values are `nothing`, `:equations` and `:equations_and_variables`.",))
     end
 end
 
@@ -309,6 +308,9 @@ function default_affine_tracking(input::StartTargetInput{<:MPPolyInputs}, hominf
 end
 function default_affine_tracking(input::HomotopyInput, hominfo)
     !(is_homogeneous(input.H))
+end
+function default_affine_tracking(input::AbstractHomotopy, hominfo)
+    !(is_homogeneous(input))
 end
 function default_affine_tracking(F::ParameterSystemInput{<:MPPolyInputs}, hominfo)
     !(is_homogeneous(F.system, hominfo; parameters = F.parameters))
@@ -358,8 +360,7 @@ function problem_startsolutions(
 )
     Random.seed!(seed)
     supported, rest = splitkwargs(kwargs, input_supported_keywords)
-    input,
-    startsolutions = input_startsolutions(
+    input, startsolutions = input_startsolutions(
         args...;
         variable_ordering = variable_ordering,
         supported...,
@@ -397,7 +398,8 @@ function problem_startsolutions(
     kwargs...,
 )
 
-    homvar_info = HomogenizationInformation(;
+    homvar_info = HomogenizationInformation(
+        ;
         homvar = homvar,
         homvars = homvars,
         variable_groups = variable_groups,
@@ -485,9 +487,7 @@ function problem_startsolutions(
         F = input.system
         tracking_type = AffineTracking()
     else
-        F,
-        vargroups,
-        homvars = homogenize_if_necessary(
+        F, vargroups, homvars = homogenize_if_necessary(
             input.system,
             homvar_info;
             vars = variable_ordering,
@@ -497,17 +497,13 @@ function problem_startsolutions(
 
     classifcation = classify_system(F, vargroups; affine_tracking = affine_tracking)
     if classifcation == :underdetermined
-        throw(ArgumentError(
-            "Underdetermined polynomial systems are currently not supported." *
-            " Consider adding linear polynomials to your system in order to reduce your system" *
-            " to a zero dimensional system.",
-        ))
+        throw(ArgumentError("Underdetermined polynomial systems are currently not supported." *
+                            " Consider adding linear polynomials to your system in order to reduce your system" *
+                            " to a zero dimensional system.",))
 # The following case is too annoying right now
     elseif classifcation == :overdetermined && ngroups(vargroups) > 1
-        error(ArgumentError(
-            "Overdetermined polynomial systems with a multi-homogeneous" *
-            " structure are currently not supported.",
-        ))
+        error(ArgumentError("Overdetermined polynomial systems with a multi-homogeneous" *
+                            " structure are currently not supported.",))
     end
 
     vars = flattened_variable_groups(vargroups)
@@ -643,10 +639,8 @@ function problem_startsolutions(
         end
         startsolutions = cell_iter
     else
-        throw(ArgumentError(
-            "Unsupported argument `start_system=$start_system`. " *
-            "Possible values are `:total_degree` and `:polyhedral`",
-        ))
+        throw(ArgumentError("Unsupported argument `start_system=$start_system`. " *
+                            "Possible values are `:total_degree` and `:polyhedral`",))
     end
 
     problem, startsolutions
@@ -725,11 +719,9 @@ function problem_startsolutions(
         starts = totaldegree_solutions(max.(degrees[1:m], maximum(degrees[m+1:end])))
     # underdetermined
     elseif classification == :underdetermined
-        throw(ArgumentError(
-            "Underdetermined polynomial systems are currently not supported." *
-            " Consider adding linear polynomials to your system in order to reduce your system" *
-            " to a zero dimensional system.",
-        ))
+        throw(ArgumentError("Underdetermined polynomial systems are currently not supported." *
+                            " Consider adding linear polynomials to your system in order to reduce your system" *
+                            " to a zero dimensional system.",))
     else # square
         G = TotalDegreeSystem(degrees; affine = !is_homogeneous)
 
@@ -754,9 +746,7 @@ function degrees_ishomogeneous(F)
     if isnothing(degs)
         degs = degrees(F)
     end
-    isnothing(
-        degs,
-    ) && throw(ArgumentError("Cannot compute degrees of the input system. Consider overloading `system_degree(F)."))
+    isnothing(degs,) && throw(ArgumentError("Cannot compute degrees of the input system. Consider overloading `system_degree(F)."))
 
     degs, is_homogeneous
 end
@@ -854,9 +844,7 @@ function problem_startsolutions(
         homvars = nothing
         F = input.system
     else
-        F,
-        variable_groups,
-        homvars = homogenize_if_necessary(
+        F, variable_groups, homvars = homogenize_if_necessary(
             input.system,
             hominfo;
             vars = variable_ordering,
@@ -875,6 +863,7 @@ function problem_startsolutions(
     Prob(H, variable_groups, seed; startsolutions_need_reordering = !affine_tracking),
     startsolutions
 end
+
 
 function problem_startsolutions(
     input::ParameterSystemInput{<:AbstractSystem},
@@ -904,4 +893,53 @@ function problem_startsolutions(
         startsolutions_need_reordering = false,
     ),
     startsolutions
+end
+
+function problem_startsolutions(
+    input::ParameterSystemInput{<:ModelKit.System},
+    startsolutions,
+    hominfo,
+    seed;
+    affine_tracking = nothing,
+    system = nothing,
+    system_scaling = nothing,
+    kwargs...,
+)
+    n, N = size(input.system)
+
+    # construct parameter homotopy
+    # TODO: Doesn't work with γ
+    H = ModelKitHomotopy(
+        build_parameter_homotopy(input.system);
+        parameters = [input.p₁; input.p₀],
+    )
+    if input.γ₁ !== nothing || input.γ₂ !== nothing
+        error("Not supported")
+    end
+
+    variable_groups = VariableGroups(N, hominfo)
+    if affine_tracking === nothing
+        affine_tracking = default_affine_tracking(H, hominfo)
+    end
+
+    variable_groups = VariableGroups(N, hominfo)
+    tracking_type = affine_tracking ? AffineTracking() : ProjectiveTracking()
+    Problem(
+        tracking_type,
+        H,
+        variable_groups,
+        seed;
+        startsolutions_need_reordering = false,
+    ),
+    startsolutions
+end
+
+function build_parameter_homotopy(F::ModelKit.System)
+    p = F.parameters
+    @var __start_params__[1:length(p)] __target_params__[1:length(p)] __t__
+    h = subs(
+        F.expressions,
+        p => __t__ .* __start_params__ .+ (1 - __t__) .* __target_params__,
+    )
+    Homotopy(h, F.variables, __t__, [__start_params__; __target_params__])
 end
